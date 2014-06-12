@@ -24,12 +24,21 @@
 #include <dirent.h>
 #include <unistd.h>
 
+char* trimString(char[]);
+
 
 int interpretCMD(char cmd[],char rest[]){
     if(strcmp(cmd,"echo")==0){
         printf("%s\n",rest);
         return EXIT_SUCCESS;
     }
+    else if (strcmp(cmd,"date")==0){
+        time_t time_raw = time(NULL);
+        struct tm * date =localtime(&time_raw);
+        printf("%s",asctime(date));
+        return EXIT_SUCCESS;
+    }
+    else{printf("command not found\n");}
     return EXIT_FAILURE;
 }
 
@@ -38,13 +47,13 @@ int interpretIn(char input[]){
     int cmdEnd = strcspn(input," ");
     if(cmdEnd==strlen(input)){}
     char cmd[cmdEnd+1];
-    int restL = strlen(input)-(cmdEnd+1); //-1 to eleminate \n , +1 to eleminate the ' '
-    char rest[restL+1];
-    strcpy(rest, input+cmdEnd+1);
-    rest[restL]='\0';
+    int paramL = strlen(input)-(cmdEnd+1); //-1 to eleminate \n , +1 to eleminate the ' '
+    char params[paramL+1];
+    strcpy(params, input+cmdEnd+1);
+    params[paramL]='\0';
     strncpy(cmd, input, cmdEnd);
     cmd[cmdEnd]='\0';
-    interpretCMD(cmd,rest);
+    interpretCMD(cmd,params);
     return 1;
 }
 
@@ -57,10 +66,22 @@ int main(void)
         char i[256];
         fgets(i,sizeof(i),stdin);
         
-        interpretIn(i);
+        interpretIn(trimString(i));
     }
     
     return 0;
+}
+
+char* trimString(char in[]){
+    int start=0;
+    int end=strlen(in)-2;
+    for(start;isspace(in[start]);start++){}
+    for(end;isspace(in[end]);end--){}
+    char out[end-start+2];
+    strncpy(out, in+start, end-start+1);
+    out[strlen(out)-2] = '\n';
+    out[strlen(out)-1] = '\0';
+    return out;
 }
 
 
