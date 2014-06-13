@@ -37,6 +37,9 @@ int interpretCMD(char *cmd,char *param){
         printf("%s\n",param);
         return EXIT_SUCCESS;
     }
+    else if (strcmp(cmd,"exit")==0){
+        exit(0);
+    }
     //return the actuall date
     else if (strcmp(cmd,"date")==0){
         time_t time_raw = time(NULL); //get seconds since 1st Jan. 1970
