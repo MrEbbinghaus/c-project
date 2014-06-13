@@ -1,0 +1,4 @@
+*.xcodeproj
+*.1
+*.pbxproj
+/DerivedData
