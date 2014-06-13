@@ -43,7 +43,7 @@ int interpretCMD(char cmd[],char rest[]){
 }
 
 int interpretIn(char input[]){
-    input[strlen(input)-1]=NULL;
+    input[strlen(input)-1]=0;
     int cmdEnd = strcspn(input," ");
     if(cmdEnd==strlen(input)){}
     char cmd[cmdEnd+1];
@@ -73,15 +73,20 @@ int main(void)
 }
 
 char* trimString(char in[]){
+    printf("Input: %s",in);
     int start=0;
-    int end=strlen(in)-2;
+    int end=strlen(in)-1;
     for(start;isspace(in[start]);start++){}
     for(end;isspace(in[end]);end--){}
-    char out[end-start+2];
-    strncpy(out, in+start, end-start+1);
-    out[strlen(out)-2] = '\n';
-    out[strlen(out)-1] = '\0';
-    return out;
+    char o[end-start+3];
+
+    
+    strncpy(o, in+start, end-start+3);
+    o[end-start+1] = '\n';
+    o[end-start+2] = '\0';
+    printf("getrimmter String: %s",o);
+    printf("Länge: %lu\n",strlen(o));
+    return o;
 }
 
 
