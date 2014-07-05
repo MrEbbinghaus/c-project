@@ -24,72 +24,46 @@
 #include <dirent.h>
 #include <unistd.h>
 
+//const
+const char* INVALID_ARGS = "invalid arguments";
+const char* INVALID_CMD = "command not found";
+const char* INVALID_DIR = "no such file or directory";
+
 //functions
 void trimString(char *);
-void strsub(char *,int,int);
-int interpretCMD(char *,char *);
-int interpretIn(char *);
+void strsub(char *,char *,int,int);
+struct cmd* assambleStruct(char *);
+char* interpretCMD(const char *,const char *);
+const char* interpretCMDstruct(struct cmd *);
 
-//interpret the commando with the parameters
-int interpretCMD(char *cmd,char *param){
-    //
-    if(strcmp(cmd,"echo")==0){
-        printf("%s\n",param);
-        return EXIT_SUCCESS;
-    }
-    else if (strcmp(cmd,"exit")==0){
-        exit(0);
-    }
-    //return the actuall date
-    else if (strcmp(cmd,"date")==0){
-        time_t time_raw = time(NULL); //get seconds since 1st Jan. 1970
-        struct tm *date = localtime(&time_raw); //transform time_raw into a struct to hold all informations about the date
-        printf("%s",asctime(date)); //prints "date" as a formated string
-        return EXIT_SUCCESS;
-    }
-    //change directory
-    else if (strcmp(cmd,"cd")==0){
-        chdir(param); //change to param
-    }
-    else{printf("command not found\n");}
-
-    return EXIT_FAILURE;
-}
-
-//split
-int interpretIn(char *input){
-    int cmdEnd = (int)strcspn(input," "); //search for the first space //-1 to miss the ' '
-    
-    char *cmd = malloc(cmdEnd);   //
-    int paramL = (int)strlen(input)-cmdEnd; //-1 to eleminate \n
-    char *params = malloc(paramL);
-    
-    strcpy(params, input+cmdEnd+1);
-    params[paramL]='\0';
-    
-    memcpy(cmd, input, cmdEnd);
-    
-    interpretCMD(cmd,params);
-    
-    //free
-    free(cmd);
-    free(params);
-    return 1;
-}
+//structs
+struct cmd {
+    char *cmd;
+    const char *param;
+    char *pattern;
+    struct cmd *next;
+};
 
 int main(void)
 {
     while(1){
-        char cwd[257];
-        getcwd(cwd, sizeof(cwd)-1); //get current directory
-        cwd[sizeof(cwd)-1]='\0';
-        printf("%s $ ",cwd); //print out the directory
-        char *input=(char*)malloc(sizeof(char)*257);
-        //int x = strlen(input);
-        fgets(input,256,stdin);
+        //init row with current directory + $ symbol
+        char cwd[257]; //memory for the path
+        getcwd(cwd, sizeof(cwd)-1); //get current path
+        cwd[sizeof(cwd)-1]='\0'; //add 0-terminator
+        printf("%s $ ",cwd); //print out the path
         
+        //read input
+        char *input=(char*)malloc(sizeof(char)*257); //reserve enough memory for the input
+        fgets(input,256,stdin); //read input from console
+        
+        //handle input
         trimString(input);
-        interpretIn(input);
+        const char* out = interpretCMDstruct(assambleStruct(input));
+        printf("%s\n",out);
+        
+        //char* out =checkForPipes(input);
+        //printf("%s",out);
         
         //free
         free(input);
@@ -98,16 +72,110 @@ int main(void)
     return 0;
 }
 
-//removes the spaces from the beginning and the end of the string
+const char* interpretCMDstruct(struct cmd *in){
+    const char* ret;
+    
+    //go to the first
+    if (in->next != NULL) {
+        const char *t = interpretCMDstruct(in->next);
+        if(
+           strcmp(t, INVALID_CMD)==0 ||
+           strcmp(t, INVALID_DIR)==0 ||
+           strcmp(t, INVALID_ARGS)==0
+           ){
+            ret = t;
+            goto END;
+        }
+        else in->param = t;
+    }
+
+    
+    //handle "echo"
+    if(strcmp(in->cmd,"echo")==0){
+        ret = in->param;
+    }
+    
+    //handle "exit"
+    else if (strcmp(in->cmd,"exit")==0){
+        if(in->param == NULL) exit(0);
+        else ret = INVALID_ARGS;
+    }
+    
+    //handle "date"
+    else if (strcmp(in->cmd,"date")==0){
+        if(in->param == NULL){
+            time_t time_raw = time(NULL); //get seconds since 1st Jan. 1970
+            struct tm *date = localtime(&time_raw); //transform time_raw into a struct to hold all informations about the date
+            char *d = asctime(date); //returns "date" as a formated string
+            d[strlen(d)-1]=0; //remove the trailing '\n'
+            ret = d;
+        }
+        else ret = INVALID_ARGS;
+    }
+    
+    //handle "cd"
+    else if (strcmp(in->cmd,"cd")==0){
+        if(chdir(in->param) == 0) return "";
+        else ret = INVALID_DIR;
+    } //change to param
+    
+    //else:
+END:
+    free(in);
+    if(ret == NULL) ret = INVALID_CMD;
+    return ret;
+}
+
+struct cmd* assambleStruct(char *in){
+    char *currentPart;
+    struct cmd *currentStruct = NULL;
+    struct cmd *nextStruct;
+    
+    char *ptrIn;
+    currentPart = strtok_r(in,"|", &ptrIn);
+    
+    while(currentPart != NULL){
+        trimString(currentPart);
+        
+        nextStruct = malloc(sizeof(struct cmd));
+        nextStruct->next = currentStruct;
+        currentStruct = nextStruct;
+        
+        //extract commando
+        char *subpart = strtok(currentPart," ");
+        currentStruct->cmd = subpart;
+        
+        if(subpart!=NULL){
+            if(strcmp("grep", currentStruct->cmd)==0){
+                
+                subpart = strtok(NULL," ");
+                currentStruct->pattern = subpart;
+                
+                subpart = strtok(NULL,"\0");
+                currentStruct->param = subpart;
+            }
+            else{
+                subpart = strtok(NULL,"\0");
+                currentStruct->param = subpart;
+            }
+        }
+        
+        currentPart = strtok_r(ptrIn,"|",&ptrIn);
+    }
+    
+    return currentStruct;
+}
+
+//removes the white-spaces from the beginning and the end of the string
 void trimString(char *in){
     int *start = malloc(sizeof(int));
     *start = 0;
     int *end = malloc(sizeof(int));
     *end=(int)strlen(in)-1; //-1 because you don't want to count \n
-    
+
     for(*start;isspace(in[*start]);(*start)++){} //count up "start" to the first non-space char
     for(*end;isspace(in[*end]);(*end)--){} //count down "end" to the last non-space char
-    strsub(in,*start,*end);
+    strsub(in,in,*start,*end+1);
     
     //free
     free(start);
@@ -115,9 +183,9 @@ void trimString(char *in){
 }
 
 //returns the pointer to a substring from s to e (both inclusive) in a specific string
-void strsub(char *in,const int s, const int e){
-    memcpy(in, in+s, e-s+1); // copy everything from the input to
-    in[e-s+1] = '\0'; //add the terminator
+void strsub(char *in,char *out,const int s, const int e){
+    memcpy(out, in+s, e-s); // copy everything from the input to
+    out[e-s] = '\0'; //add the terminator
 }
 
 
