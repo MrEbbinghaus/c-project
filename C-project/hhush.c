@@ -1,6 +1,6 @@
 //
 //  hhush.c
-//  C-project for the
+//  C-project for the module "Computer Science 2"
 //
 //  Created by Bjoern Ebbinghaus on 12.06.14.
 //  Copyright (c) 2014 Bjoern Ebbinghaus. All rights reserved.
@@ -35,6 +35,7 @@ void strsub(char *,char *,int,int);
 struct cmd* assambleStruct(char *);
 char* interpretCMD(const char *,const char *);
 const char* interpretCMDstruct(struct cmd *);
+char* concat(char *,char *);
 
 //structs
 struct cmd {
@@ -60,7 +61,8 @@ int main(void)
         //handle input
         trimString(input);
         const char* out = interpretCMDstruct(assambleStruct(input));
-        printf("%s\n",out);
+        if(out) printf("%s\n",out);
+        //else printf("%s",out);
         
         //char* out =checkForPipes(input);
         //printf("%s",out);
@@ -115,9 +117,27 @@ const char* interpretCMDstruct(struct cmd *in){
     
     //handle "cd"
     else if (strcmp(in->cmd,"cd")==0){
-        if(chdir(in->param) == 0) return "";
+        if(chdir(in->param) == 0) return 0;
         else ret = INVALID_DIR;
     } //change to param
+    
+    else if (strcmp(in->cmd,"ls")==0){
+        DIR *dir = opendir("."); //opens current directory in a dir-stream
+        char *t = "";
+        while(dir){
+            struct dirent *d = readdir(dir); //get the next dir
+            if(d){
+                if(*d->d_name != '.'){ //if(d_name doesn't begin with '.'){...}
+                    t = concat(t, d->d_name);
+                    t = concat(t, "\n");
+                }
+            }
+            else break;
+        }
+        t[strlen(t)-1]=0; //remove last \n
+        strcpy(ret, t);
+        free(t);
+    }
     
     //else:
 END:
@@ -145,6 +165,7 @@ struct cmd* assambleStruct(char *in){
         char *subpart = strtok(currentPart," ");
         currentStruct->cmd = subpart;
         
+        //extract params
         if(subpart!=NULL){
             if(strcmp("grep", currentStruct->cmd)==0){
                 
@@ -186,6 +207,14 @@ void trimString(char *in){
 void strsub(char *in,char *out,const int s, const int e){
     memcpy(out, in+s, e-s); // copy everything from the input to
     out[e-s] = '\0'; //add the terminator
+}
+
+char* concat(char *a, char *b)
+{
+    char *r = malloc(strlen(a)+strlen(b)+1);//add 1 for \0
+    strcpy(r, a);
+    strcat(r, b);
+    return r;
 }
 
 
