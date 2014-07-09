@@ -36,6 +36,9 @@ struct cmd* assambleStruct(char *);
 char* interpretCMD(const char *,const char *);
 const char* interpretCMDstruct(struct cmd *);
 char* concat(char *,char *);
+void addHist(const char *);
+char* getLastXNodes(int);
+char* getLastNode();
 
 //structs
 struct cmd {
@@ -45,18 +48,27 @@ struct cmd {
     struct cmd *next;
 };
 
-int main(void)
-{
+struct histNode {
+    char* cmd;
+    struct histNode *next;
+};
+
+struct histNode *top;
+
+
+int main(void){
     while(1){
         //init row with current directory + $ symbol
-        char cwd[257]; //memory for the path
+        char cwd[256]; //memory for the path
         getcwd(cwd, sizeof(cwd)-1); //get current path
         cwd[sizeof(cwd)-1]='\0'; //add 0-terminator
         printf("%s $ ",cwd); //print out the path
         
         //read input
-        char *input=(char*)malloc(sizeof(char)*257); //reserve enough memory for the input
-        fgets(input,256,stdin); //read input from console
+        char *input=(char*)malloc(sizeof(char)*258); //reserve enough memory for the input
+        fgets(input,258,stdin); //read input from console
+        
+        addHist(input);
         
         //handle input
         trimString(input);
@@ -75,7 +87,7 @@ int main(void)
 }
 
 const char* interpretCMDstruct(struct cmd *in){
-    const char* ret;
+    char* ret = NULL;
     
     //go to the first
     if (in->next != NULL) {
@@ -85,64 +97,83 @@ const char* interpretCMDstruct(struct cmd *in){
            strcmp(t, INVALID_DIR)==0 ||
            strcmp(t, INVALID_ARGS)==0
            ){
-            ret = t;
+            ret = (char*)t;
             goto END;
         }
         else in->param = t;
     }
 
-    
-    //handle "echo"
-    if(strcmp(in->cmd,"echo")==0){
-        ret = in->param;
-    }
-    
-    //handle "exit"
-    else if (strcmp(in->cmd,"exit")==0){
-        if(in->param == NULL) exit(0);
-        else ret = INVALID_ARGS;
-    }
-    
-    //handle "date"
-    else if (strcmp(in->cmd,"date")==0){
-        if(in->param == NULL){
-            time_t time_raw = time(NULL); //get seconds since 1st Jan. 1970
-            struct tm *date = localtime(&time_raw); //transform time_raw into a struct to hold all informations about the date
-            char *d = asctime(date); //returns "date" as a formated string
-            d[strlen(d)-1]=0; //remove the trailing '\n'
-            ret = d;
+    if(in->cmd != NULL){
+        //handle "echo"
+        if(strcmp(in->cmd,"echo")==0){
+            ret = (char*)in->param;
         }
-        else ret = INVALID_ARGS;
-    }
-    
-    //handle "cd"
-    else if (strcmp(in->cmd,"cd")==0){
-        if(chdir(in->param) == 0) return 0;
-        else ret = INVALID_DIR;
-    } //change to param
-    
-    else if (strcmp(in->cmd,"ls")==0){
-        DIR *dir = opendir("."); //opens current directory in a dir-stream
-        char *t = "";
-        while(dir){
-            struct dirent *d = readdir(dir); //get the next dir
-            if(d){
-                if(*d->d_name != '.'){ //if(d_name doesn't begin with '.'){...}
-                    t = concat(t, d->d_name);
-                    t = concat(t, "\n");
-                }
+        
+        //handle "exit"
+        else if (strcmp(in->cmd,"exit")==0){
+            if(in->param == NULL) exit(0);
+            else ret = (char*)INVALID_ARGS;
+        }
+        
+        //handle "date"
+        else if (strcmp(in->cmd,"date")==0){
+            if(in->param == NULL){
+                time_t time_raw = time(NULL); //get seconds since 1st Jan. 1970
+                struct tm *date = localtime(&time_raw); //transform time_raw into a struct to hold all informations about the date
+                char *d = asctime(date); //returns "date" as a formated string
+                d[strlen(d)-1]=0; //remove the trailing '\n'
+                ret = d;
             }
-            else break;
+            else ret = (char*)INVALID_ARGS;
         }
-        t[strlen(t)-1]=0; //remove last \n
-        strcpy(ret, t);
-        free(t);
+        
+        //handle "cd"
+        else if (strcmp(in->cmd,"cd")==0){
+            if(chdir(in->param) == 0) return 0;
+            else ret = (char*)INVALID_DIR;
+        } //change to param
+        
+        //handle "ls"
+        else if (strcmp(in->cmd,"ls")==0){
+            DIR *dir = opendir("."); //opens current directory in a dir-stream
+            char *t = "";
+            while(dir){
+                struct dirent *d = readdir(dir); //get the next dir
+                if(d){
+                    if(*d->d_name != '.'){ //if(d_name doesn't begin with '.'){...}
+                        t = concat(t, d->d_name);
+                        t = concat(t, "\n");
+                    }
+                }
+                else break;
+            }
+            t[strlen(t)-1]=0; //remove last \n
+            strcpy(ret, t);
+            free(t);
+        }
+        
+        //handle "grep"
+        else if (strcmp(in->cmd,"grep") == 0){
+            //if(FILE *file = fopen(in->param, "r") == NULL) { //"r" for read
+                ret = (char*)INVALID_DIR;
+                goto END;
+            //}
+            
+            
+
+        }
+        
+        else if(strcmp(in->cmd, "history") == 0){
+            if(in->param == NULL){
+                ret = getLastNode();
+            }
+        }
     }
     
     //else:
 END:
     free(in);
-    if(ret == NULL) ret = INVALID_CMD;
+    if(ret == NULL) ret = (char*)INVALID_CMD;
     return ret;
 }
 
@@ -153,8 +184,12 @@ struct cmd* assambleStruct(char *in){
     
     char *ptrIn;
     currentPart = strtok_r(in,"|", &ptrIn);
+    /*if (currentPart == NULL) {
+        nextStruct = malloc(sizeof(struct cmd));
+        nextStruct->ne
+    }*/
     
-    while(currentPart != NULL){
+    do{
         trimString(currentPart);
         
         nextStruct = malloc(sizeof(struct cmd));
@@ -182,25 +217,27 @@ struct cmd* assambleStruct(char *in){
         }
         
         currentPart = strtok_r(ptrIn,"|",&ptrIn);
-    }
+    }while (currentPart != NULL);
     
     return currentStruct;
 }
 
 //removes the white-spaces from the beginning and the end of the string
 void trimString(char *in){
-    int *start = malloc(sizeof(int));
-    *start = 0;
-    int *end = malloc(sizeof(int));
-    *end=(int)strlen(in)-1; //-1 because you don't want to count \n
+    if(in != NULL){
+        int start = 0;
+        int end;
+        end=(int)strlen(in)-1; //-1 because you don't want to count \n
 
-    for(*start;isspace(in[*start]);(*start)++){} //count up "start" to the first non-space char
-    for(*end;isspace(in[*end]);(*end)--){} //count down "end" to the last non-space char
-    strsub(in,in,*start,*end+1);
-    
-    //free
-    free(start);
-    free(end);
+        for (; isspace(in[start]); start++) {} //count up "start" to the first non-space char
+        for (; isspace(in[end]); end--) {} //count down "end" to the last non-space char
+        
+        strsub(in,in,start,end+1);
+        
+        //free
+        /*free(start);
+        free(end);*/
+    }
 }
 
 //returns the pointer to a substring from s to e (both inclusive) in a specific string
@@ -217,4 +254,32 @@ char* concat(char *a, char *b)
     return r;
 }
 
+void addHist(const char *in){
+    struct histNode *new = malloc(sizeof(struct histNode));
+    new->cmd = malloc(sizeof(in));
+    strcpy(new->cmd, in);
+    new->next = top;
+    top = new;
+}
+
+char* getLastXNodes(int x){
+    char *out = "";
+    struct histNode *tmp_head = top;
+    for(int i=0;i<x+1;i++){
+        out = concat(out, tmp_head->cmd);
+        tmp_head = tmp_head->next;
+    }
+    return out;
+}
+
+char* getLastNode(){
+    char *out = "";
+    struct histNode *tmp_head = top;
+    while(tmp_head != NULL){
+        out = concat(out, tmp_head->cmd);
+        tmp_head = tmp_head->next;
+    }
+    out[strlen(out)-1] = 0;
+    return out;
+}
 
