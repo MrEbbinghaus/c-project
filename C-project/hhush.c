@@ -79,11 +79,11 @@ int main(void){
         //addHist(input);echo abc |
         char* out = interpretCMDstruct( assambleStruct( input ) );
         
-        if( (*out != '\0')) {
-            if(out[strlen(out)-1] != '\n'){
+        if( (out != NULL)) {
+            if( out[strlen(out)-1] != '\n' && (*out != '\0') ) {
                 printf("%s\n",out);
             }
-            else{
+            else {
                 printf("%s",out);
             }
         }
@@ -182,23 +182,23 @@ char* interpretCMDstruct(struct cmd *in){
         else if ( strcmp(in->cmd,"ls")==0 ) {
             if(in->param == NULL){
                 DIR *dir = opendir ("."); //opens current directory in a dir-stream
-                char *t = malloc(0);
+                struct dirent *d = readdir(dir);
+                char *t = malloc(1);
                 strcpy(t,"");
-                while (dir) {
-                    struct dirent *d = readdir(dir); //get the next dir
-                    if (d) {
-                        if (*d->d_name != '.') { //if(d_name doesn't begin with '.'){...}
-                            t = realloc(t, strlen(t) + strlen(d->d_name) + 1);
-                            strcat(t, d->d_name);
-                            strcat(t, "\n");
-                        }
+                
+                while(d) {
+                    if (*d->d_name != '.') { //if(d_name doesn't begin with '.'){...}
+                        t = realloc(t, strlen(t) + strlen(d->d_name) + 1);
+                        strcat(t, d->d_name);
+                        strcat(t, "\n");
                     }
-                    else break;
+                    d = readdir(dir); //get the next dir
                 }
+                closedir(dir);
                 t[strlen(t)-1] = 0; //remove the last \n
-                ret = malloc( strlen(t) + 1);
+                ret = (char*) malloc( strlen(t) + 1);
                 strcpy(ret, t);
-                free(t); //free t
+                free(t);
             }
             else{
                 ret = (char*) malloc( sizeof(char*) * (strlen(INVALID_ARGS) +1 ) );
@@ -329,15 +329,17 @@ void trimString(char *in){
     char* ret;
     int start;
     int end;
+    // |0123456789|
+    // |  123456 \|
     
     if(in != NULL){
         start = 0;
-        end = (int)strlen(in)-1; //-1 because you don't want to count \n
+        end = (int)strlen(in)-1; //-1 or off-by-one
         
-        while ( isspace( in[start]  ) ) start++;   //count up "start" to the first non-space char
-        while ( isspace( in[end]    ) ) end--;       //count down "end" to the last non-space char
+        while ( isspace( in[start]  ) && start  <strlen(in) ) start++;  //start++;   //count up "start" to the first non-space char
+        while ( isspace( in[end]    ) && end    >0          ) end--;    //end--;     //count down "end" to the last non-space char
         
-        ret = malloc(end+1-start +1); //+1 -> \n
+        ret = (char*) malloc(sizeof(char*) * (end+1 - start +1) ); //+1 -> \0
         strsub(in,ret,start,end+1);
         
         strcpy(in, ret);
@@ -349,7 +351,7 @@ void trimString(char *in){
 //returns the pointer to a substring from s to e (both inclusive) in a specific string
 void strsub(const char *in,char *out,const int s, const int e){
     if (s <= e) {
-        memcpy(out, in+s, e-s); // copy everything from the input to out
+        strncpy(out, in+s, e-s); // copy everything from the input to out
         out[e-s] = '\0'; //add the terminator
     }
 }
