@@ -71,16 +71,17 @@ int main(void){
         
         
         //read input
-        input = (char*)malloc(259); //reserve enough memory for the input
+        input = (char*)malloc(258); //reserve enough memory for the input
         fgets(input,258,stdin); //read input from console
         
         //handle input
         trimString(input);
         //addHist(input);echo abc |
-        char* out = interpretCMDstruct( assambleStruct( input ) );
+        char* out = NULL;
+        out = interpretCMDstruct( assambleStruct( input ) );
         
         if( (out != NULL)) {
-            if( out[strlen(out)-1] != '\n' && (*out != '\0') ) {
+            if( (*out != '\0') && (out[strlen(out)-1] != '\n') ) {
                 printf("%s\n",out);
             }
             else {
@@ -92,13 +93,14 @@ int main(void){
         //free
         if(out) free(out);
         free(input);
+        input = NULL;
     }
     
     return 0;
 }
 
 char* interpretCMDstruct(struct cmd *in){
-    char* ret;
+    char* ret = NULL;
     
     // go recursive to the last element
     if (in->next != NULL) {
@@ -161,10 +163,10 @@ char* interpretCMDstruct(struct cmd *in){
         }
         
         //handle "cd"
-        else if (strcmp(in->cmd,"cd")==0) {
+        else if (strcmp(in->cmd,"cd") == 0 ) {
             if(in->param != NULL){
                 if(chdir(in->param) == 0) {
-                    ret = malloc(1);
+                    ret = (char*) malloc(sizeof(char)*1);
                     strcpy(ret,"");
                 }
                 else {
@@ -179,7 +181,7 @@ char* interpretCMDstruct(struct cmd *in){
         } //change to param
         
         //handle "ls"
-        else if ( strcmp(in->cmd,"ls")==0 ) {
+        else if ( strcmp(in->cmd,"ls") == 0 ) {
             if(in->param == NULL){
                 DIR *dir = opendir ("."); //opens current directory in a dir-stream
                 struct dirent *d = readdir(dir);
@@ -188,7 +190,7 @@ char* interpretCMDstruct(struct cmd *in){
                 
                 while(d) {
                     if (*d->d_name != '.') { //if(d_name doesn't begin with '.'){...}
-                        t = realloc(t, strlen(t) + strlen(d->d_name) + 1);
+                        t = realloc(t, strlen(t) + strlen(d->d_name) + 2);
                         strcat(t, d->d_name);
                         strcat(t, "\n");
                     }
@@ -208,15 +210,29 @@ char* interpretCMDstruct(struct cmd *in){
         
         //handle "grep"
         else if (strcmp(in->cmd,"grep") == 0 ) {
-            FILE *file = fopen(in->param, "r");
-            if(file == NULL) {
-                ret = (char*) malloc( sizeof(char*) * (strlen(INVALID_DIR)+1) );
-                strcpy(ret, INVALID_DIR);
+            if(in->next == NULL){
+                FILE *file = fopen(in->param, "r");
+                if(file == NULL) {
+                    ret = (char*) malloc( sizeof(char*) * (strlen(INVALID_DIR)+1) );
+                    strcpy(ret, INVALID_DIR);
+                }
+                else{
+                    ret = grep(in->pattern, file);
+                }
+                fclose(file);
             }
             else{
-                ret = grep(in->pattern, file);
+                char* line = strtok(in->param, "\n");
+                ret = (char*) malloc( sizeof(char) * 1 );
+                *ret = 0;
+                while( line ) {
+                    if( strstr(line, in->pattern) ) {
+                        ret = (char*) realloc( ret, strlen(ret) + strlen(line) + 2);
+                        strcat(ret, line);
+                    }
+                    line = strtok(NULL, "\n");
+                }
             }
-            fclose(file);
         }
         
         //handle "history"
@@ -256,19 +272,22 @@ END:
  *  cuts down the input string and assambles an "cmd"-struct for further use
  */
 struct cmd* assambleStruct(char *in){
-    char *currentPart;
+    char *currentPart = NULL;
     struct cmd *currentStruct = NULL;
     struct cmd *nextStruct;
     
-    char *ptrIn;
+    char *ptrIn = NULL; //future pointer to the rest of the tokenized string
     currentPart = strtok_r(in,"|", &ptrIn);
     
     do {
         trimString(currentPart);
         
+        //create next struct
         nextStruct = malloc(sizeof(struct cmd));
+        nextStruct->param = NULL;
         nextStruct->pattern = NULL;
         nextStruct->next = currentStruct;
+        
         currentStruct = nextStruct;
         
         //extract commando
@@ -280,6 +299,7 @@ struct cmd* assambleStruct(char *in){
             if (strcmp( "grep", currentStruct->cmd)==0) {
                 
                 subpart = strtok(NULL," ");
+                trimString(subpart);
                 
                 char* tmp = NULL;
                 if(subpart) {
