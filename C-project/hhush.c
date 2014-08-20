@@ -80,13 +80,14 @@ int main(void){
         char* out = interpretCMDstruct( assambleStruct( input ) );
         
         if( (*out != '\0')) {
-            if(*out != '\n'){
+            if(out[strlen(out)-1] != '\n'){
                 printf("%s\n",out);
             }
             else{
                 printf("%s",out);
             }
         }
+        
         
         //free
         if(out) free(out);
@@ -214,8 +215,8 @@ char* interpretCMDstruct(struct cmd *in){
             }
             else{
                 ret = grep(in->pattern, file);
-                
             }
+            fclose(file);
         }
         
         //handle "history"
@@ -310,10 +311,11 @@ char* grep(char* pattern, FILE* file){
     const int LINE_SIZE = 4096;
     char* line = (char*)malloc( LINE_SIZE );
     char* ret = (char*)malloc( 1 * sizeof(char) );
+    ret[0] = 0;
     
     while( fgets( line, LINE_SIZE, file ) ){
         if( strstr(line, pattern) ) {
-            ret = realloc( ret, sizeof(*ret) + sizeof(*line) );
+            ret = realloc( ret, strlen(ret) + strlen(line) );
             strcat(ret,line);
         }
     }
