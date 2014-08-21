@@ -56,7 +56,9 @@ struct histNode {
 };
 
 //
-struct histNode *top;
+struct histNode *hist_top = NULL;
+struct histNode *hist_last = NULL;
+int id_counter = 0;
 char* input;
 
 
@@ -76,7 +78,7 @@ int main(void){
         
         //handle input
         trimString(input);
-        //addHist(input);echo abc |
+        addHist(input);
         char* out = NULL;
         out = interpretCMDstruct( assambleStruct( input ) );
         
@@ -136,6 +138,7 @@ char* interpretCMDstruct(struct cmd *in){
         //handle "exit"
         else if ( strcmp(in->cmd,"exit") == 0 ) {
             if(in->param == 0) {
+                clearHist();
                 free(in);
                 free(input);
                 exit(0);
@@ -243,8 +246,7 @@ char* interpretCMDstruct(struct cmd *in){
             else {
                 if ( strcmp(in->param ,"-c") == 0 ) {
                     clearHist();
-                    ret = (char*) malloc( 1 * sizeof(char) );
-                    ret = '\0';
+                    ret = (char*) calloc( 1, sizeof(char) );
                 }
                 else {
                     ret = getLastXNodes( atol(in->param) );
@@ -271,7 +273,7 @@ END:
 /*
  *  cuts down the input string and assambles an "cmd"-struct for further use
  */
-struct cmd* assambleStruct(char *in){
+struct cmd* assambleStruct(char* in){
     char *currentPart = NULL;
     struct cmd *currentStruct = NULL;
     struct cmd *nextStruct;
@@ -330,8 +332,7 @@ struct cmd* assambleStruct(char *in){
 char* grep(char* pattern, FILE* file){
     const int LINE_SIZE = 4096;
     char* line = (char*)malloc( LINE_SIZE );
-    char* ret = (char*)malloc( 1 * sizeof(char) );
-    ret[0] = 0;
+    char* ret = (char*)calloc( 1 , sizeof(char) );
     
     while( fgets( line, LINE_SIZE, file ) ){
         if( strstr(line, pattern) ) {
@@ -376,50 +377,65 @@ void strsub(const char *in,char *out,const int s, const int e){
     }
 }
 
+//TODO: switch to queue
 void addHist(const char *in) {
-    struct histNode *new = malloc(sizeof(struct histNode)); //alloc new struct
-    new->cmd = malloc(strlen(in)+1);
+    struct histNode *new = malloc( sizeof(struct histNode) ); //alloc new struct
+    new->cmd = malloc( strlen(in)+1 );
     strcpy(new->cmd, in);
-    new->next = top;
-    top = new;
+    new->id = id_counter++;
+    new->next = NULL;
+    if(hist_last != NULL ) hist_last->next = new;
+    else hist_top = new;
+    hist_last = new;
 }
 
-char* getLastXNodes(long x){
-    char *out = "";
+char* getLastXNodes(long x) {
+    char *ret = calloc(1, sizeof(char));
+    
     if(x > 0) {
-        struct histNode *tmp_head = top;
+        struct histNode *tmp_head = hist_top;
         for (int i=0 ; i<x && tmp_head != NULL ; i++) {
-            //out = concat(out, tmp_head->cmd);
+            
+            char* pline = (char*) malloc(sizeof(int) + 1 + strlen(tmp_head->cmd) +2);
+            sprintf(pline, "%d %s\n", tmp_head->id, tmp_head->cmd);
+            
             tmp_head = tmp_head->next;
         }
-        out[strlen(out)-1] = 0;
+        ret[ strlen(ret)-1 ] = 0;
     }
-    else out = (char*)INVALID_ARGS;
-    return out;
-}
-
-void clearHist(){
-    while (top != NULL) {
-        free(top);
-        top = top->next;
-    }
-}
-
-char* getHistory(){
-    char buffer[15];
-    int c;
-    char *out = "";
-    struct histNode *tmp_head = top;
     
-    c = 0;
-    while(tmp_head != NULL){
-        sprintf(buffer, "%d: ", c);
-        //out = concat(out, buffer);
-        //out = concat(out, tmp_head->cmd);
-        //out = concat(out, "\n");
-        tmp_head = tmp_head->next;
-        c++;
+    else {
+        ret = (char*) realloc(ret, strlen(INVALID_ARGS) +1 );
+        strcpy(ret, INVALID_ARGS);
     }
-    out[strlen(out)-1] = 0;
-    return out;
+    return ret;
+}
+
+void clearHist() {
+    id_counter = 0;
+    while (hist_top != NULL) {
+        free(hist_top);
+        hist_top = hist_top->next;
+    }
+    hist_last = NULL;
+}
+
+char* getHistory() {
+    char* ret = (char*) calloc(1, sizeof(char) );
+    struct histNode *tmp_head = hist_top;
+    
+    while(tmp_head != NULL){
+        
+        char* pline = (char*) malloc(sizeof(int) + 1 + strlen(tmp_head->cmd) +2);
+        sprintf(pline, "%d %s\n", tmp_head->id, tmp_head->cmd);
+        
+        ret = realloc(ret, strlen(ret) + strlen(pline) +1);
+        sprintf(ret, "%s%s", ret,pline );
+        free(pline);
+        
+        tmp_head = tmp_head->next;
+        
+    }
+    
+    return ret;
 }
