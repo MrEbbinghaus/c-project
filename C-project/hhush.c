@@ -29,6 +29,7 @@
 const char* INVALID_ARGS = "invalid arguments";
 const char* INVALID_CMD = "command not found";
 const char* INVALID_DIR = "no such file or directory";
+const int   MAX_DIR_SIZE = 1024;
 
 //functions
 void trimString(char *);
@@ -37,9 +38,10 @@ struct cmd* assambleStruct(char *);
 char* grep(char*, FILE*);
 char* interpretCMDstruct(struct cmd *);
 void addHist(const char *);
-char* getLastXNodes(long);
+char* getLastXNodes(int);
 char* getHistory();
 void clearHist();
+void saveHist();
 
 //structs
 struct cmd {
@@ -52,22 +54,27 @@ struct cmd {
 struct histNode {
     char* cmd;
     struct histNode *next;
+    struct histNode *prev;
     int id;
 };
 
-//
+//misc
 struct histNode *hist_top = NULL;
 struct histNode *hist_last = NULL;
 int id_counter = 0;
 char* input;
 
+char start_dir[ 1024 ];
 
 int main(void){
+    
+    //save current directory;
+    getcwd( start_dir,sizeof(start_dir)-1 );
     
     while(1){
         
         //init row with current directory + $ symbol
-        char cwd[257]; //memory for the path
+        char cwd[ MAX_DIR_SIZE ]; //memory for the path
         if( getcwd( cwd,sizeof(cwd)-1 ) == 0 ) return EXIT_FAILURE; //get current path
         printf("%s $ ", cwd); //print out the path
         
@@ -138,6 +145,7 @@ char* interpretCMDstruct(struct cmd *in){
         //handle "exit"
         else if ( strcmp(in->cmd,"exit") == 0 ) {
             if(in->param == 0) {
+                saveHist();
                 clearHist();
                 free(in);
                 free(input);
@@ -213,15 +221,18 @@ char* interpretCMDstruct(struct cmd *in){
         
         //handle "grep"
         else if (strcmp(in->cmd,"grep") == 0 ) {
+            
             if(in->next == NULL){
                 FILE *file = fopen(in->param, "r");
+                
                 if(file == NULL) {
-                    ret = (char*) malloc( sizeof(char*) * (strlen(INVALID_DIR)+1) );
-                    strcpy(ret, INVALID_DIR);
+                    ret = (char*) malloc( sizeof(char) * ( strlen(INVALID_DIR) +1 ) );
+                    sprintf(ret, "%s",INVALID_DIR);
                 }
                 else{
                     ret = grep(in->pattern, file);
                 }
+                
                 fclose(file);
             }
             else{
@@ -249,7 +260,7 @@ char* interpretCMDstruct(struct cmd *in){
                     ret = (char*) calloc( 1, sizeof(char) );
                 }
                 else {
-                    ret = getLastXNodes( atol(in->param) );
+                    ret = getLastXNodes( atoi(in->param) );
                 }
                 //strtol for parsing String -> Int
             }
@@ -336,7 +347,7 @@ char* grep(char* pattern, FILE* file){
     
     while( fgets( line, LINE_SIZE, file ) ){
         if( strstr(line, pattern) ) {
-            ret = realloc( ret, strlen(ret) + strlen(line) );
+            ret = realloc( ret, strlen(ret) + strlen(line) + 1);
             strcat(ret,line);
         }
     }
@@ -347,7 +358,7 @@ char* grep(char* pattern, FILE* file){
 
 //removes the white-spaces from the beginning and the end of the string
 void trimString(char *in){
-    char* ret;
+    char* tmp = NULL;
     int start;
     int end;
     // |0123456789|
@@ -360,11 +371,29 @@ void trimString(char *in){
         while ( isspace( in[start]  ) && start  <strlen(in) ) start++;  //start++;   //count up "start" to the first non-space char
         while ( isspace( in[end]    ) && end    >0          ) end--;    //end--;     //count down "end" to the last non-space char
         
-        ret = (char*) malloc(sizeof(char*) * (end+1 - start +1) ); //+1 -> \0
-        strsub(in,ret,start,end+1);
+        tmp = (char*) calloc( (end+1 - start +1) , sizeof(char*)); //+1 -> \0
+        strsub(in,tmp,start,end+1);
+        strcpy(in, tmp);
+
+        char* tmp2 = (char*) calloc(1, sizeof(char));
+        for(int p = 0; tmp[p] != '\0' ; p++){
+            if( !isspace(tmp[p]) ){
+                int t = p;
+                while( ( !isspace(tmp[++p]) ) && ( tmp[p]!='\0' ) ){}
+                
+                char* tmp3 = calloc(p-t+1,sizeof(char));
+                strsub(tmp, tmp3, t, p);
+                
+                tmp2 = realloc(tmp2, strlen(tmp2) + 1 + p - t +1); //+1: space //+1: '\0' //p-t:=substring
+                if(*tmp2) sprintf(tmp2, "%s %s",tmp2,tmp3);
+                else sprintf(tmp2, "%s", tmp3);
+                free(tmp3);
+            }
+        }
+        free(tmp);
+        strcpy(in, tmp2);
+        free(tmp2);
         
-        strcpy(in, ret);
-        free(ret);
     }
     
 }
@@ -377,31 +406,47 @@ void strsub(const char *in,char *out,const int s, const int e){
     }
 }
 
-//TODO: switch to queue
 void addHist(const char *in) {
     struct histNode *new = malloc( sizeof(struct histNode) ); //alloc new struct
     new->cmd = malloc( strlen(in)+1 );
     strcpy(new->cmd, in);
     new->id = id_counter++;
     new->next = NULL;
-    if(hist_last != NULL ) hist_last->next = new;
+    new->prev = NULL;
+    
+    if(hist_last != NULL ) {
+        hist_last->next = new;
+        new->prev = hist_last;
+    }
     else hist_top = new;
+    
     hist_last = new;
 }
 
-char* getLastXNodes(long x) {
+char* getLastXNodes(int x) {
     char *ret = calloc(1, sizeof(char));
     
     if(x > 0) {
-        struct histNode *tmp_head = hist_top;
-        for (int i=0 ; i<x && tmp_head != NULL ; i++) {
+        struct histNode *tmp_head = hist_last;
+        
+        while(--x > 0 && (tmp_head->prev != NULL) ) {
+            tmp_head = tmp_head->prev;
+        }
+        for (int i=0 ; tmp_head != NULL ; i++) {
             
-            char* pline = (char*) malloc(sizeof(int) + 1 + strlen(tmp_head->cmd) +2);
-            sprintf(pline, "%d %s\n", tmp_head->id, tmp_head->cmd);
+            char* pline = (char*) malloc(sizeof(int) + 1 + strlen(tmp_head->cmd) +1);
+            
+            sprintf(pline, "%d %s", tmp_head->id, tmp_head->cmd);
+            
+            ret = realloc(ret, strlen(ret) + strlen(pline) + 2 );
+            sprintf(ret, "%s%s\n", ret, pline);
+            
+            free(pline);
             
             tmp_head = tmp_head->next;
         }
-        ret[ strlen(ret)-1 ] = 0;
+        
+        ret[ strlen(ret) ] = 0;
     }
     
     else {
@@ -414,8 +459,10 @@ char* getLastXNodes(long x) {
 void clearHist() {
     id_counter = 0;
     while (hist_top != NULL) {
-        free(hist_top);
+        free(hist_top->cmd);
+        struct histNode* tmp = hist_top;
         hist_top = hist_top->next;
+        free(tmp);
     }
     hist_last = NULL;
 }
@@ -438,4 +485,13 @@ char* getHistory() {
     }
     
     return ret;
+}
+
+void saveHist() {
+    chdir(start_dir);
+    FILE* file = fopen("hhush.histfile", "w");
+    
+    //fputs( , file);
+    
+    fclose(file);
 }
