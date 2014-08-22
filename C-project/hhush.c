@@ -79,11 +79,11 @@ int main(void){
         if( getcwd( cwd,sizeof(cwd)-1 ) == 0 ) return EXIT_FAILURE; //get current path
         printf("%s $ ", cwd); //print out the path
         
-        
         //read input
-        input = (char*)malloc(258); //reserve enough memory for the input
+        input = (char*)malloc(259); //reserve enough memory for the input
         fgets(input,258,stdin); //read input from console
-        
+        fpurge(stdin); //flush stdin in case of a LARGE input
+
         //handle input
         trimString(input);
         addHist(input);
@@ -134,7 +134,7 @@ char* interpretCMDstruct(struct cmd *in){
         //handle "echo"
         if ( strcmp( in->cmd, "echo" ) == 0 ){
             if(in->param != NULL){
-                ret = malloc( strlen(in->param) +1);
+                ret = (char*) malloc( strlen(in->param) +1);
                 strcpy(ret, in->param);
             }
             else{
@@ -179,8 +179,7 @@ char* interpretCMDstruct(struct cmd *in){
             if(in->param != NULL){
                 if( !contSpace(in->param) ){
                     if(chdir(in->param) == 0) {
-                        ret = (char*) malloc(sizeof(char)*1);
-                        strcpy(ret,"");
+                        ret = NULL;
                     }
                     else {
                         ret = (char*) malloc( sizeof(char*) * (strlen(INVALID_DIR) +1 ) );
@@ -196,7 +195,7 @@ char* interpretCMDstruct(struct cmd *in){
                 ret =(char*) malloc( sizeof(char*) * (strlen(INVALID_ARGS) +1 ) );
                 strcpy(ret, INVALID_ARGS);
             }
-        } //change to param
+        }
         
         //handle "ls"
         else if ( strcmp(in->cmd,"ls") == 0 ) {
@@ -264,7 +263,7 @@ char* interpretCMDstruct(struct cmd *in){
             else {
                 if ( strcmp(in->param ,"-c") == 0 ) {
                     clearHist();
-                    ret = (char*) calloc( 1, sizeof(char) );
+                    ret = NULL;
                 }
                 else {
                     ret = getLastXNodes( atoi(in->param) );
@@ -295,7 +294,7 @@ struct cmd* assambleStruct(char* in){
     struct cmd *currentStruct = NULL;
     struct cmd *nextStruct;
     
-    char *ptrIn = NULL; //future pointer to the rest of the tokenized string
+    char *ptrIn = in; //future pointer to the rest of the tokenized string
     currentPart = strtok_r(in,"|", &ptrIn);
     
     do {
