@@ -34,6 +34,7 @@ const int   MAX_DIR_SIZE = 1024;
 //functions
 void trimString(char *);
 void strsub(const char *,char *,int,int);
+int contSpace(const char *);
 struct cmd* assambleStruct(char *);
 char* grep(char*, FILE*);
 char* interpretCMDstruct(struct cmd *);
@@ -176,13 +177,19 @@ char* interpretCMDstruct(struct cmd *in){
         //handle "cd"
         else if (strcmp(in->cmd,"cd") == 0 ) {
             if(in->param != NULL){
-                if(chdir(in->param) == 0) {
-                    ret = (char*) malloc(sizeof(char)*1);
-                    strcpy(ret,"");
+                if( !contSpace(in->param) ){
+                    if(chdir(in->param) == 0) {
+                        ret = (char*) malloc(sizeof(char)*1);
+                        strcpy(ret,"");
+                    }
+                    else {
+                        ret = (char*) malloc( sizeof(char*) * (strlen(INVALID_DIR) +1 ) );
+                        strcpy(ret,INVALID_DIR);
+                    }
                 }
                 else {
-                    ret = (char*) malloc( sizeof(char*) * (strlen(INVALID_DIR) +1 ) );
-                    strcpy(ret,INVALID_DIR);
+                    ret = (char*) malloc( sizeof(char*) * (strlen(INVALID_ARGS) +1 ) );
+                    strcpy(ret,INVALID_ARGS);
                 }
             }
             else{
@@ -223,11 +230,11 @@ char* interpretCMDstruct(struct cmd *in){
         else if (strcmp(in->cmd,"grep") == 0 ) {
             
             if(in->next == NULL){
-                FILE *file = fopen(in->param, "r");
-                
+                FILE* file = fopen(in->param, "r");
+
                 if(file == NULL) {
                     ret = (char*) malloc( sizeof(char) * ( strlen(INVALID_DIR) +1 ) );
-                    sprintf(ret, "%s",INVALID_DIR);
+                    ret = strcpy(ret, INVALID_DIR);
                 }
                 else{
                     ret = grep(in->pattern, file);
@@ -237,8 +244,7 @@ char* interpretCMDstruct(struct cmd *in){
             }
             else{
                 char* line = strtok(in->param, "\n");
-                ret = (char*) malloc( sizeof(char) * 1 );
-                *ret = 0;
+                ret = (char*) calloc( 1, sizeof(char) );
                 while( line ) {
                     if( strstr(line, in->pattern) ) {
                         ret = (char*) realloc( ret, strlen(ret) + strlen(line) + 2);
@@ -263,7 +269,6 @@ char* interpretCMDstruct(struct cmd *in){
                 else {
                     ret = getLastXNodes( atoi(in->param) );
                 }
-                //strtol for parsing String -> Int
             }
         }
         
@@ -357,7 +362,7 @@ char* grep(char* pattern, FILE* file){
     return ret;
 }
 
-//removes the white-spaces from the beginning and the end of the string
+//removes the white-spaces from the beginning and the end of the string and multiple spaces will be compressed to a single space
 void trimString(char *in){
     char* tmp = NULL;
     int start;
@@ -407,6 +412,15 @@ void strsub(const char *in,char *out,const int s, const int e){
     }
 }
 
+//check weather a string contains a space character. Yes? -> return 1, No? -> return 0
+int contSpace(const char* in){
+    for(int i=0; i<strlen(in) ; i++){
+        if(isspace( in[i] ) ) return 1;
+    }
+    return 0;
+}
+
+//adds an string to the history
 void addHist(const char *in) {
     struct histNode *new = malloc( sizeof(struct histNode) ); //alloc new struct
     new->cmd = malloc( strlen(in)+1 );
@@ -424,6 +438,7 @@ void addHist(const char *in) {
     hist_last = new;
 }
 
+//returns the last x entries in the history as a string [has to be free'd!]
 char* getLastXNodes(int x) {
     char *ret = calloc(1, sizeof(char));
     
@@ -457,6 +472,7 @@ char* getLastXNodes(int x) {
     return ret;
 }
 
+//frees the History and resets top, last und id-counter of the history
 void clearHist() {
     id_counter = 0;
     while (hist_top != NULL) {
@@ -468,6 +484,7 @@ void clearHist() {
     hist_last = NULL;
 }
 
+//returns the whole history as a string [has to be free'd]
 char* getHistory() {
     char* ret = (char*) calloc(1, sizeof(char) );
     struct histNode *tmp_head = hist_top;
@@ -487,6 +504,7 @@ char* getHistory() {
     
     return ret;
 }
+
 
 void saveHist() {
     chdir(start_dir);
