@@ -242,7 +242,8 @@ char* interpretCMDstruct(struct cmd *in){
                 while( line ) {
                     if( strstr(line, in->pattern) ) {
                         ret = (char*) realloc( ret, strlen(ret) + strlen(line) + 2);
-                        strcat(ret, line);
+                        if(*ret) sprintf(ret,"%s\n%s", ret, line);
+                        else sprintf(ret, "%s" ,line);
                     }
                     line = strtok(NULL, "\n");
                 }
