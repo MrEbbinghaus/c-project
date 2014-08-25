@@ -43,6 +43,7 @@ char* getLastXNodes(int);
 char* getHistory();
 void clearHist();
 void saveHist();
+void loadHist();
 
 //structs
 struct cmd {
@@ -71,6 +72,8 @@ int main(void){
     
     //save current directory;
     getcwd( start_dir,sizeof(start_dir)-1 );
+    
+    loadHist();
     
     while(1){
         
@@ -347,7 +350,7 @@ struct cmd* assambleStruct(char* in){
 
 char* grep(char* pattern, FILE* file){
     const int LINE_SIZE = 4096;
-    char* line = (char*)malloc( LINE_SIZE );
+    char* line = (char*)malloc( LINE_SIZE * sizeof(char));
     char* ret = (char*)calloc( 1 , sizeof(char) );
     
     while( fgets( line, LINE_SIZE, file ) ){
@@ -507,9 +510,29 @@ char* getHistory() {
 
 void saveHist() {
     chdir(start_dir);
-    FILE* file = fopen("hhush.histfile", "w");
-    
-    //fputs( , file);
+    FILE* file = fopen(".hhush.histfile", "w");
+    char* tmp = getLastXNodes(1000);
+    fputs(tmp , file);
+    free(tmp);
     
     fclose(file);
 }
+
+void loadHist() {
+    
+    const int LINE_SIZE = 268; // ID + 256 cmd + \n + \0
+    FILE* file = fopen(".hhush.histfile", "r");
+    
+    if (file != NULL){
+        char* line = (char*) malloc(LINE_SIZE * sizeof(char));
+        while( fgets(line, LINE_SIZE, file) ) {
+            line[strlen(line)-1] = 0; //remove \n
+            addHist(line+2);
+
+        }
+        free(line);
+    }
+    
+    fclose(file);
+}
+
