@@ -39,7 +39,7 @@ struct cmd* assambleStruct(char *);
 char* grep(char*, FILE*);
 char* interpretCMDstruct(struct cmd *);
 void addHist(const char *);
-char* getLastXNodes(int);
+char* getLastXNodes(int, int);
 char* getHistory();
 void clearHist();
 void saveHist();
@@ -85,8 +85,7 @@ int main(void){
         //read input
         input = (char*)malloc(259); //reserve enough memory for the input
         fgets(input,258,stdin); //read input from console
-        fpurge(stdin); //flush stdin in case of a LARGE input
-
+        
         //handle input
         trimString(input);
         addHist(input);
@@ -141,8 +140,8 @@ char* interpretCMDstruct(struct cmd *in){
                 strcpy(ret, in->param);
             }
             else{
-                ret = malloc(1);
-                strcpy(ret, "");
+                ret = malloc(2);
+                strcpy(ret, "\n");
             }
         }
         
@@ -231,20 +230,21 @@ char* interpretCMDstruct(struct cmd *in){
         //handle "grep"
         else if (strcmp(in->cmd,"grep") == 0 ) {
             
-            if(in->next == NULL){
+            if(in->next == NULL && in->param != NULL && !contSpace(in->param)){
+                
                 FILE* file = fopen(in->param, "r");
-
+                
                 if(file == NULL) {
                     ret = (char*) malloc( sizeof(char) * ( strlen(INVALID_DIR) +1 ) );
                     ret = strcpy(ret, INVALID_DIR);
                 }
                 else{
                     ret = grep(in->pattern, file);
+                    fclose(file);
                 }
                 
-                fclose(file);
             }
-            else{
+            else if(in->next != NULL && in->param != NULL){
                 char* line = strtok(in->param, "\n");
                 ret = (char*) calloc( 1, sizeof(char) );
                 while( line ) {
@@ -256,6 +256,10 @@ char* interpretCMDstruct(struct cmd *in){
                     line = strtok(NULL, "\n");
                 }
             }
+            else{
+                ret = (char*) malloc( sizeof(char) * ( strlen(INVALID_ARGS) +1 ) );
+                ret = strcpy(ret, INVALID_ARGS);
+            }
         }
         
         //handle "history"
@@ -263,14 +267,18 @@ char* interpretCMDstruct(struct cmd *in){
             if (in->param == NULL) {
                 ret = getHistory();
             }
-            else {
+            else if( !contSpace(in->param) ) {
                 if ( strcmp(in->param ,"-c") == 0 ) {
                     clearHist();
                     ret = NULL;
                 }
                 else {
-                    ret = getLastXNodes( atoi(in->param) );
+                    ret = getLastXNodes( atoi(in->param) ,0);
                 }
+            }
+            else {
+                ret = (char*) malloc( sizeof(char) * ( strlen(INVALID_ARGS) +1 ) );
+                ret = strcpy(ret, INVALID_ARGS);
             }
         }
         
@@ -299,10 +307,9 @@ struct cmd* assambleStruct(char* in){
     
     char *ptrIn = in; //future pointer to the rest of the tokenized string
     currentPart = strtok_r(in,"|", &ptrIn);
+    trimString(currentPart);
     
     do {
-        trimString(currentPart);
-        
         //create next struct
         nextStruct = malloc(sizeof(struct cmd));
         nextStruct->param = NULL;
@@ -320,7 +327,7 @@ struct cmd* assambleStruct(char* in){
             if (strcmp( "grep", currentStruct->cmd)==0) {
                 
                 subpart = strtok(NULL," ");
-                trimString(subpart);
+                //trimString(subpart);
                 
                 char* tmp = NULL;
                 if(subpart) {
@@ -332,7 +339,7 @@ struct cmd* assambleStruct(char* in){
             
             
             subpart = strtok(NULL,"\0");
-            trimString(subpart);
+            //trimString(subpart);
             
             char* tmp = NULL;
             if(subpart) {
@@ -382,7 +389,7 @@ void trimString(char *in){
         tmp = (char*) calloc( (end+1 - start +1) , sizeof(char*)); //+1 -> \0
         strsub(in,tmp,start,end+1);
         strcpy(in, tmp);
-
+        
         char* tmp2 = (char*) calloc(1, sizeof(char));
         for(int p = 0; tmp[p] != '\0' ; p++){
             if( !isspace(tmp[p]) ){
@@ -416,10 +423,13 @@ void strsub(const char *in,char *out,const int s, const int e){
 
 //check weather a string contains a space character. Yes? -> return 1, No? -> return 0
 int contSpace(const char* in){
-    for(int i=0; i<strlen(in) ; i++){
-        if(isspace( in[i] ) ) return 1;
+    if(in){
+        for(int i=0; i<strlen(in) ; i++){
+            if(isspace( in[i] ) ) return 1;
+        }
+        return 0;
     }
-    return 0;
+    return 1;
 }
 
 //adds an string to the history
@@ -441,7 +451,7 @@ void addHist(const char *in) {
 }
 
 //returns the last x entries in the history as a string [has to be free'd!]
-char* getLastXNodes(int x) {
+char* getLastXNodes(int x, int toFile) {
     char *ret = calloc(1, sizeof(char));
     
     if(x > 0) {
@@ -454,7 +464,8 @@ char* getLastXNodes(int x) {
             
             char* pline = (char*) malloc(sizeof(int) + 1 + strlen(tmp_head->cmd) +1);
             
-            sprintf(pline, "%d %s", tmp_head->id, tmp_head->cmd);
+            if(toFile)  sprintf(pline,"%s", tmp_head->cmd);
+            else        sprintf(pline, "%d %s", tmp_head->id, tmp_head->cmd);
             
             ret = realloc(ret, strlen(ret) + strlen(pline) + 2 );
             sprintf(ret, "%s%s\n", ret, pline);
@@ -511,7 +522,7 @@ char* getHistory() {
 void saveHist() {
     chdir(start_dir);
     FILE* file = fopen(".hhush.histfile", "w");
-    char* tmp = getLastXNodes(1000);
+    char* tmp = getLastXNodes(1000, 1);
     fputs(tmp , file);
     free(tmp);
     
@@ -525,14 +536,12 @@ void loadHist() {
     
     if (file != NULL){
         char* line = (char*) malloc(LINE_SIZE * sizeof(char));
-        while( fgets(line, LINE_SIZE, file) ) {
+        while( fgets(line, LINE_SIZE-1, file) ) {
             line[strlen(line)-1] = 0; //remove \n
-            addHist(line+2);
-
+            addHist(line);
         }
         free(line);
+        fclose(file);
     }
-    
-    fclose(file);
 }
 
